@@ -75,6 +75,36 @@
     cursor:pointer;
   }
   #logout-btn:hover{ border-color:var(--terra); color:var(--terra); }
+  #support-btn{
+    margin:0 14px 12px 14px;
+    padding:10px;
+    border-radius:12px;
+    border:1px dashed var(--gold);
+    background:rgba(240,178,58,0.08);
+    color:var(--gold);
+    font-size:12px;
+    font-weight:600;
+    cursor:pointer;
+    flex-shrink:0;
+  }
+  #support-btn:hover{ background:rgba(240,178,58,0.16); }
+  .modal-overlay{
+    position:absolute; inset:0; background:rgba(0,0,0,0.6);
+    display:none; align-items:center; justify-content:center; z-index:50;
+    padding:24px;
+  }
+  .modal-overlay.active{ display:flex; }
+  .modal-box{
+    background:var(--bg-panel); border-radius:16px; padding:24px;
+    max-width:280px; text-align:center; border:1px solid #2A3F38;
+  }
+  .modal-box h3{ color:var(--gold); margin:0 0 8px 0; font-size:17px; }
+  .modal-box p{ color:var(--text-dim); font-size:13px; line-height:1.5; margin:0 0 14px 0; }
+  .modal-box .wave-number{ color:var(--cream); font-size:22px; font-weight:700; letter-spacing:1px; margin-bottom:16px; }
+  .modal-box button{
+    width:100%; padding:10px; border-radius:10px; border:none;
+    background:var(--terra); color:var(--cream); font-weight:600; cursor:pointer; font-size:13px;
+  }
 
   #new-convo-bar{ display:flex; gap:8px; padding:12px 14px; border-bottom:1px solid #2A3F38; flex-shrink:0; }
   #new-convo-input{ flex:1; padding:10px 12px; border-radius:20px; border:1px solid #3A4E47; background:var(--bg-panel); color:var(--text); font-size:13px; outline:none; }
@@ -182,6 +212,7 @@
       </div>
       <button id="logout-btn" title="Changer de nom">Quitter</button>
     </div>
+    <button id="support-btn">☕ Soutenir le créateur</button>
     <div id="new-convo-bar">
       <input id="new-convo-input" type="text" placeholder="Discuter avec... (nom)" maxlength="20" />
       <button id="new-convo-btn">Ouvrir</button>
@@ -210,6 +241,15 @@
       <button id="send-btn">➤</button>
     </div>
     <div class="status-line" id="status-line">&nbsp;</div>
+  </div>
+
+  <div class="modal-overlay" id="support-modal">
+    <div class="modal-box">
+      <h3>☕ Soutenir Palava</h3>
+      <p>Cette app est créée et maintenue par ZADI SERI DANIEL PHINE. Si elle vous est utile, un petit don via Wave est toujours apprécié 🙏</p>
+      <div class="wave-number">07 69 79 71 79</div>
+      <button id="close-support-modal">Fermer</button>
+    </div>
   </div>
 </div>
 
@@ -256,6 +296,9 @@
   const messagesEl = document.getElementById('messages');
   const statusLine = document.getElementById('status-line');
   const logoutBtn = document.getElementById('logout-btn');
+  const supportBtn = document.getElementById('support-btn');
+  const supportModal = document.getElementById('support-modal');
+  const closeSupportModal = document.getElementById('close-support-modal');
 
   db.ref('.info/connected').on('value', snap => {
     if(snap.val() === true){
@@ -575,6 +618,9 @@
     }
   });
   logoutBtn.addEventListener('click', logout);
+  supportBtn.addEventListener('click', () => supportModal.classList.add('active'));
+  closeSupportModal.addEventListener('click', () => supportModal.classList.remove('active'));
+  supportModal.addEventListener('click', (e) => { if(e.target === supportModal) supportModal.classList.remove('active'); });
 
 })();
 </script>
