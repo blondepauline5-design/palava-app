@@ -193,9 +193,11 @@
     <div class="logo-mark">Palava</div>
     <div class="logo-sub">des conversations, juste entre vous deux</div>
     <input id="username-input" class="text-input" type="text" placeholder="Votre nom (ex: Daniel)" maxlength="20" />
+    <input id="email-input" class="text-input" type="email" placeholder="Email (pour récupérer votre compte)" maxlength="80" style="display:none" />
     <input id="password-input" class="text-input" type="password" placeholder="Mot de passe (6 caractères min.)" maxlength="50" />
     <button id="enter-btn" class="primary-btn">Se connecter</button>
     <button id="toggle-mode-btn" class="link-btn">Pas encore de compte ? Créer un compte</button>
+    <button id="forgot-pass-btn" class="link-btn">Mot de passe oublié ?</button>
     <div id="auth-error" class="auth-error"></div>
     <div class="login-note"><span class="conn-dot" id="conn-dot"></span><span id="conn-text">Connexion à la base de données...</span></div>
     <div class="creator-credit">Créé par ZADI SERI DANIEL PHINE</div>
@@ -285,6 +287,8 @@
   const loginScreen = document.getElementById('login-screen');
   const usernameInput = document.getElementById('username-input');
   const passwordInput = document.getElementById('password-input');
+  const emailInput = document.getElementById('email-input');
+  const forgotPassBtn = document.getElementById('forgot-pass-btn');
   const toggleModeBtn = document.getElementById('toggle-mode-btn');
   const authError = document.getElementById('auth-error');
   const enterBtn = document.getElementById('enter-btn');
@@ -638,19 +642,21 @@
     db.ref('contacts/' + safeKey(username || '')).off('value');
   }
 
-  function toEmail(name){    return safeKey(name) + '@palava.local';
-  }
-
   function enterApp(){
     const val = usernameInput.value.trim();
     const pass = passwordInput.value;
+    const emailVal = emailInput.value.trim();
     authError.textContent = '';
     if(!val || pass.length < 6){
       authError.textContent = 'Nom requis, mot de passe : 6 caractères minimum.';
       return;
     }
-    const email = toEmail(val);
+    if(isSignupMode && !emailVal){
+      authError.textContent = 'Un email est requis pour pouvoir récupérer votre compte plus tard.';
+      return;
+    }
     enterBtn.disabled = true;
+
     const onSuccess = () => {
       username = val;
       meLabel.textContent = 'connecté en tant que ' + username;
@@ -662,26 +668,61 @@
     const onError = (err) => {
       enterBtn.disabled = false;
       if(err.code === 'auth/email-already-in-use'){
-        authError.textContent = 'Ce nom est déjà pris. Essayez de vous connecter, ou choisissez un autre nom.';
+        authError.textContent = 'Cet email est déjà utilisé pour un autre compte.';
       }else if(err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential'){
         authError.textContent = 'Mot de passe incorrect.';
-      }else if(err.code === 'auth/user-not-found'){
-        authError.textContent = "Ce compte n'existe pas encore. Cliquez sur \"Créer un compte\".";
+      }else if(err.code === 'auth/user-not-found' || err.code === 'not-found'){
+        authError.textContent = "Ce compte n'existe pas. Cliquez sur \"Créer un compte\".";
       }else{
         authError.textContent = 'Erreur : ' + err.message;
       }
     };
 
     if(isSignupMode){
-      auth.createUserWithEmailAndPassword(email, pass).then(onSuccess).catch(onError);
+      auth.createUserWithEmailAndPassword(emailVal, pass)
+        .then(() => db.ref('usernames/' + safeKey(val)).set(emailVal))
+        .then(onSuccess)
+        .catch(onError);
     }else{
-      auth.signInWithEmailAndPassword(email, pass).then(onSuccess).catch(onError);
+      db.ref('usernames/' + safeKey(val)).once('value')
+        .then(snap => {
+          const email = snap.val();
+          if(!email){ const e = new Error(); e.code = 'not-found'; throw e; }
+          return auth.signInWithEmailAndPassword(email, pass);
+        })
+        .then(onSuccess)
+        .catch(onError);
     }
+  }
+
+  function forgotPassword(){
+    const val = usernameInput.value.trim();
+    authError.textContent = '';
+    if(!val){
+      authError.textContent = "Entrez d'abord votre nom d'utilisateur ci-dessus.";
+      return;
+    }
+    db.ref('usernames/' + safeKey(val)).once('value').then(snap => {
+      const email = snap.val();
+      if(!email){
+        authError.textContent = "Aucun compte trouvé avec ce nom.";
+        return;
+      }
+      auth.sendPasswordResetEmail(email).then(() => {
+        authError.style.color = '#7FBF9E';
+        authError.textContent = 'Email de récupération envoyé ! Vérifiez votre boîte mail.';
+      }).catch(err => {
+        authError.style.color = '';
+        authError.textContent = 'Erreur : ' + err.message;
+      });
+    });
   }
 
   function toggleAuthMode(){
     isSignupMode = !isSignupMode;
     authError.textContent = '';
+    emailInput.style.display = isSignupMode ? 'block' : 'none';
+    forgotPassBtn.style.display = isSignupMode ? 'none' : 'block';
     if(isSignupMode){
       document.getElementById('enter-btn').textContent = 'Créer mon compte';
       toggleModeBtn.textContent = 'Déjà un compte ? Se connecter';
@@ -718,6 +759,7 @@
   usernameInput.addEventListener('keydown', e => { if(e.key === 'Enter') enterApp(); });
   passwordInput.addEventListener('keydown', e => { if(e.key === 'Enter') enterApp(); });
   toggleModeBtn.addEventListener('click', toggleAuthMode);
+  forgotPassBtn.addEventListener('click', forgotPassword);
   newConvoBtn.addEventListener('click', startNewConvo);
   newConvoInput.addEventListener('keydown', e => { if(e.key === 'Enter') startNewConvo(); });
   backBtn.addEventListener('click', goBackToList);
