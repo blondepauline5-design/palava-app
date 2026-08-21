@@ -57,6 +57,8 @@
   .primary-btn:hover{ background:#C1541F; transform: translateY(-1px); }
   .primary-btn:active{ transform: translateY(0); }
   .login-note{ color:var(--text-dim); font-size:12px; max-width:280px; line-height:1.5; }
+  .link-btn{ background:none; border:none; color:var(--teal); font-size:12px; cursor:pointer; text-decoration:underline; padding:0; }
+  .auth-error{ color:#E08B8B; font-size:12px; min-height:14px; }
   .creator-credit{ color:var(--text-dim); font-size:11px; opacity:0.7; margin-top:8px; letter-spacing:0.3px; }
 
   #list-screen{ min-height:0; }
@@ -191,7 +193,10 @@
     <div class="logo-mark">Palava</div>
     <div class="logo-sub">des conversations, juste entre vous deux</div>
     <input id="username-input" class="text-input" type="text" placeholder="Votre nom (ex: Daniel)" maxlength="20" />
-    <button id="enter-btn" class="primary-btn">Entrer</button>
+    <input id="password-input" class="text-input" type="password" placeholder="Mot de passe (6 caractères min.)" maxlength="50" />
+    <button id="enter-btn" class="primary-btn">Se connecter</button>
+    <button id="toggle-mode-btn" class="link-btn">Pas encore de compte ? Créer un compte</button>
+    <div id="auth-error" class="auth-error"></div>
     <div class="login-note"><span class="conn-dot" id="conn-dot"></span><span id="conn-text">Connexion à la base de données...</span></div>
     <div class="creator-credit">Créé par ZADI SERI DANIEL PHINE</div>
   </div>
@@ -255,6 +260,7 @@
 
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script>
 (function(){
   const firebaseConfig = {
@@ -269,6 +275,7 @@
   };
   firebase.initializeApp(firebaseConfig);
   const db = firebase.database();
+  const auth = firebase.auth();
 
   let username = null;
   let currentPeer = null;
@@ -277,6 +284,9 @@
 
   const loginScreen = document.getElementById('login-screen');
   const usernameInput = document.getElementById('username-input');
+  const passwordInput = document.getElementById('password-input');
+  const toggleModeBtn = document.getElementById('toggle-mode-btn');
+  const authError = document.getElementById('auth-error');
   const enterBtn = document.getElementById('enter-btn');
   const meLabel = document.getElementById('me-label');
   const connDot = document.getElementById('conn-dot');
@@ -573,22 +583,70 @@
     }
   }
 
+  let isSignupMode = false;
+
+  function toEmail(name){
+    return safeKey(name) + '@palava.local';
+  }
+
   function enterApp(){
     const val = usernameInput.value.trim();
-    if(!val) return;
-    username = val;
-    meLabel.textContent = 'connecté en tant que ' + username;
-    showScreen('list-screen');
-    renderContactList();
+    const pass = passwordInput.value;
+    authError.textContent = '';
+    if(!val || pass.length < 6){
+      authError.textContent = 'Nom requis, mot de passe : 6 caractères minimum.';
+      return;
+    }
+    const email = toEmail(val);
+    enterBtn.disabled = true;
+    const onSuccess = () => {
+      username = val;
+      meLabel.textContent = 'connecté en tant que ' + username;
+      showScreen('list-screen');
+      renderContactList();
+      enterBtn.disabled = false;
+    };
+    const onError = (err) => {
+      enterBtn.disabled = false;
+      if(err.code === 'auth/email-already-in-use'){
+        authError.textContent = 'Ce nom est déjà pris. Essayez de vous connecter, ou choisissez un autre nom.';
+      }else if(err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential'){
+        authError.textContent = 'Mot de passe incorrect.';
+      }else if(err.code === 'auth/user-not-found'){
+        authError.textContent = "Ce compte n'existe pas encore. Cliquez sur \"Créer un compte\".";
+      }else{
+        authError.textContent = 'Erreur : ' + err.message;
+      }
+    };
+
+    if(isSignupMode){
+      auth.createUserWithEmailAndPassword(email, pass).then(onSuccess).catch(onError);
+    }else{
+      auth.signInWithEmailAndPassword(email, pass).then(onSuccess).catch(onError);
+    }
+  }
+
+  function toggleAuthMode(){
+    isSignupMode = !isSignupMode;
+    authError.textContent = '';
+    if(isSignupMode){
+      document.getElementById('enter-btn').textContent = 'Créer mon compte';
+      toggleModeBtn.textContent = 'Déjà un compte ? Se connecter';
+    }else{
+      document.getElementById('enter-btn').textContent = 'Se connecter';
+      toggleModeBtn.textContent = 'Pas encore de compte ? Créer un compte';
+    }
   }
 
   function logout(){
     if(currentMsgsRef && currentMsgsHandler){
       currentMsgsRef.off('value', currentMsgsHandler);
     }
+    auth.signOut();
     username = null;
     currentPeer = null;
     usernameInput.value = '';
+    passwordInput.value = '';
     showScreen('login-screen');
     usernameInput.focus();
   }
@@ -604,6 +662,8 @@
 
   enterBtn.addEventListener('click', enterApp);
   usernameInput.addEventListener('keydown', e => { if(e.key === 'Enter') enterApp(); });
+  passwordInput.addEventListener('keydown', e => { if(e.key === 'Enter') enterApp(); });
+  toggleModeBtn.addEventListener('click', toggleAuthMode);
   newConvoBtn.addEventListener('click', startNewConvo);
   newConvoInput.addEventListener('keydown', e => { if(e.key === 'Enter') startNewConvo(); });
   backBtn.addEventListener('click', goBackToList);
