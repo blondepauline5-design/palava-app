@@ -131,6 +131,10 @@
   #mic-btn{ width:44px;height:44px; border-radius:50%; border:none; background:var(--teal); color:var(--cream); font-size:16px; cursor:pointer; display:flex;align-items:center;justify-content:center; flex-shrink:0; transition: background 0.15s ease; }
   #mic-btn:hover{ background:#256A5D; }
   #mic-btn.recording{ background:var(--terra); animation: pulse 1s infinite; }
+  #photo-btn{ width:44px;height:44px; border-radius:50%; border:none; background:var(--gold); color:#1A1208; font-size:16px; cursor:pointer; display:flex;align-items:center;justify-content:center; flex-shrink:0; transition: background 0.15s ease; }
+  #photo-btn:hover{ background:#D89E2F; }
+  .photo-bubble img{ max-width:200px; max-height:200px; border-radius:10px; display:block; cursor:pointer; }
+  .photo-bubble.uploading{ opacity:0.5; }
   @keyframes pulse{ 0%,100%{ transform:scale(1); } 50%{ transform:scale(1.08); } }
   .voice-bubble{ display:flex; align-items:center; gap:8px; min-width:150px; }
   .voice-bubble button{ width:30px;height:30px;border-radius:50%; border:none; background:rgba(0,0,0,0.25); color:var(--cream); font-size:13px; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
@@ -200,6 +204,8 @@
     </div>
     <div class="composer">
       <input id="msg-input" type="text" placeholder="Écrire un message..." maxlength="500" />
+      <input type="file" id="photo-input" accept="image/*" style="display:none" />
+      <button id="photo-btn" title="Envoyer une photo">📷</button>
       <button id="mic-btn" title="Message vocal">🎤</button>
       <button id="send-btn">➤</button>
     </div>
@@ -245,6 +251,8 @@
   const msgInput = document.getElementById('msg-input');
   const sendBtn = document.getElementById('send-btn');
   const micBtn = document.getElementById('mic-btn');
+  const photoBtn = document.getElementById('photo-btn');
+  const photoInput = document.getElementById('photo-input');
   const messagesEl = document.getElementById('messages');
   const statusLine = document.getElementById('status-line');
   const logoutBtn = document.getElementById('logout-btn');
@@ -308,7 +316,7 @@
           const val2 = msnap.val() || {};
           const arr = Object.values(val2);
           const last = arr.length ? arr[arr.length - 1] : null;
-          const lastPreview = last ? (last.type === 'voice' ? '🎤 message vocal' : last.text) : 'Aucun message';
+          const lastPreview = last ? (last.type === 'voice' ? '🎤 message vocal' : last.type === 'photo' ? '📷 Photo' : last.text) : 'Aucun message';
           const row = document.createElement('div');
           row.className = 'contact-row';
           row.innerHTML = `
@@ -341,8 +349,13 @@
       const bubble = document.createElement('div');
       bubble.className = 'bubble';
 
-      if(m.type === 'voice' && m.audio){
-        bubble.classList.add('voice-bubble');
+      if(m.type === 'photo' && m.photo){
+        bubble.classList.add('photo-bubble');
+        const img = document.createElement('img');
+        img.src = m.photo;
+        img.addEventListener('click', () => window.open(m.photo, '_blank'));
+        bubble.appendChild(img);
+      }else if(m.type === 'voice' && m.audio){        bubble.classList.add('voice-bubble');
         const playBtn = document.createElement('button');
         playBtn.textContent = '▶';
         const audioEl = new Audio(m.audio);
@@ -389,8 +402,32 @@
     messagesEl.scrollTop = messagesEl.scrollHeight;
   }
 
-  function deleteMessage(msgId){
-    if(!currentPeer) return;
+  function sendPhotoFile(file){
+    if(!currentPeer || !file) return;
+    statusLine.textContent = 'Envoi de la photo...';
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const maxDim = 700;
+        let w = img.width, h = img.height;
+        if(w > h && w > maxDim){ h = Math.round(h * maxDim / w); w = maxDim; }
+        else if(h > maxDim){ w = Math.round(w * maxDim / h); h = maxDim; }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
+        const key = pairKey(username, currentPeer);
+        db.ref('conversations/' + key).push({ user: username, type: 'photo', photo: dataUrl, ts: Date.now() })
+          .then(() => { statusLine.innerHTML = '&nbsp;'; })
+          .catch(() => { statusLine.textContent = "Échec de l'envoi de la photo."; });
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function deleteMessage(msgId){    if(!currentPeer) return;
     if(!confirm('Supprimer ce message ?')) return;
     const key = pairKey(username, currentPeer);
     db.ref('conversations/' + key + '/' + msgId).remove()
@@ -530,6 +567,13 @@
   sendBtn.addEventListener('click', sendMessage);
   msgInput.addEventListener('keydown', e => { if(e.key === 'Enter') sendMessage(); });
   micBtn.addEventListener('click', toggleRecording);
+  photoBtn.addEventListener('click', () => photoInput.click());
+  photoInput.addEventListener('change', () => {
+    if(photoInput.files && photoInput.files[0]){
+      sendPhotoFile(photoInput.files[0]);
+      photoInput.value = '';
+    }
+  });
   logoutBtn.addEventListener('click', logout);
 
 })();
