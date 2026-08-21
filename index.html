@@ -584,9 +584,61 @@
   }
 
   let isSignupMode = false;
+  let sessionStartTime = Date.now();
+  let notifiedPeers = {};
+  let globalListeners = {};
 
-  function toEmail(name){
-    return safeKey(name) + '@palava.local';
+  function setupNotifications(){
+    sessionStartTime = Date.now();
+    if('Notification' in window && Notification.permission === 'default'){
+      Notification.requestPermission();
+    }
+    watchContactsForNotifications();
+  }
+
+  function watchContactsForNotifications(){
+    if(!username) return;
+    db.ref('contacts/' + safeKey(username)).on('value', snap => {
+      const val = snap.val() || {};
+      const peers = Object.values(val);
+      peers.forEach(peer => attachNotificationListener(peer));
+    });
+  }
+
+  function attachNotificationListener(peer){
+    const key = pairKey(username, peer);
+    if(globalListeners[key]) return;
+    const ref = db.ref('conversations/' + key).orderByChild('ts').startAt(sessionStartTime);
+    const handler = ref.on('child_added', snap => {
+      const m = snap.val();
+      if(!m || m.user.toLowerCase() === username.toLowerCase()) return;
+      const viewingThisChat = currentPeer && safeKey(currentPeer) === safeKey(peer) && !document.hidden;
+      if(viewingThisChat) return;
+      showNotification(peer, m);
+    });
+    globalListeners[key] = { ref, handler };
+  }
+
+  function showNotification(peer, m){
+    if(!('Notification' in window) || Notification.permission !== 'granted') return;
+    let body = m.text || '';
+    if(m.type === 'voice') body = '🎤 Message vocal';
+    if(m.type === 'photo') body = '📷 Photo';
+    try{
+      const notif = new Notification('Palava — ' + peer, { body: body, icon: 'data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 64 64\'%3E%3Crect width=\'64\' height=\'64\' rx=\'14\' fill=\'%2316221F\'/%3E%3Cpath d=\'M14 20c0-3.3 2.7-6 6-6h24c3.3 0 6 2.7 6 6v16c0 3.3-2.7 6-6 6H28l-9 8v-8h-3c-3.3 0-6-2.7-6-6V20z\' fill=\'%23F0B23A\'/%3E%3C/svg%3E' });
+      notif.onclick = () => { window.focus(); openChat(peer); notif.close(); };
+    }catch(e){}
+  }
+
+  function clearNotificationListeners(){
+    Object.keys(globalListeners).forEach(key => {
+      globalListeners[key].ref.off('child_added', globalListeners[key].handler);
+    });
+    globalListeners = {};
+    db.ref('contacts/' + safeKey(username || '')).off('value');
+  }
+
+  function toEmail(name){    return safeKey(name) + '@palava.local';
   }
 
   function enterApp(){
@@ -605,6 +657,7 @@
       showScreen('list-screen');
       renderContactList();
       enterBtn.disabled = false;
+      setupNotifications();
     };
     const onError = (err) => {
       enterBtn.disabled = false;
@@ -642,6 +695,7 @@
     if(currentMsgsRef && currentMsgsHandler){
       currentMsgsRef.off('value', currentMsgsHandler);
     }
+    clearNotificationListeners();
     auth.signOut();
     username = null;
     currentPeer = null;
