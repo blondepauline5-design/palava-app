@@ -120,6 +120,18 @@
   .contact-avatar{ width:40px;height:40px;border-radius:50%; background: linear-gradient(135deg, var(--teal), #1B4A40); display:flex;align-items:center;justify-content:center; font-weight:700; font-size:15px; color:var(--cream); flex-shrink:0; }
   .contact-name{ font-size:14px; font-weight:600; }
   .contact-preview{ font-size:12px; color:var(--text-dim); max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .contact-info{ flex:1; min-width:0; }
+  .unread-badge{
+    background:var(--terra); color:var(--cream); font-size:11px; font-weight:700;
+    min-width:20px; height:20px; border-radius:10px; display:flex; align-items:center; justify-content:center;
+    padding:0 6px; flex-shrink:0;
+  }
+  .remove-contact-btn{
+    background:none; border:none; color:var(--text-dim); font-size:14px; cursor:pointer;
+    opacity:0; transition:opacity 0.15s ease; padding:4px 6px; flex-shrink:0;
+  }
+  .contact-row:hover .remove-contact-btn{ opacity:0.6; }
+  .remove-contact-btn:hover{ opacity:1 !important; color:#E08B8B; }
   .empty-list{ margin:40px auto; text-align:center; color:var(--text-dim); font-size:13px; max-width:220px; line-height:1.6; }
 
   #chat-screen{ min-height:0; }
@@ -356,6 +368,11 @@
     return db.ref().update(updates);
   }
 
+  function markAsRead(peer){
+    if(!username) return;
+    db.ref('reads/' + safeKey(username) + '/' + safeKey(peer)).set(Date.now());
+  }
+
   function renderContactList(){
     db.ref('contacts/' + safeKey(username)).once('value').then(snap => {
       const val = snap.val() || {};
@@ -369,21 +386,35 @@
       const rows = {};
       peers.forEach(peer => {
         const key = pairKey(username, peer);
-        db.ref('conversations/' + key).limitToLast(1).once('value').then(msnap => {
+        Promise.all([
+          db.ref('conversations/' + key).limitToLast(50).once('value'),
+          db.ref('reads/' + safeKey(username) + '/' + safeKey(peer)).once('value')
+        ]).then(([msnap, rsnap]) => {
           const val2 = msnap.val() || {};
-          const arr = Object.values(val2);
+          const arr = Object.values(val2).sort((a,b) => a.ts - b.ts);
           const last = arr.length ? arr[arr.length - 1] : null;
+          const lastReadTs = rsnap.val() || 0;
+          const unreadCount = arr.filter(m => m.ts > lastReadTs && m.user.toLowerCase() !== username.toLowerCase()).length;
           const lastPreview = last ? (last.type === 'voice' ? '🎤 message vocal' : last.type === 'photo' ? '📷 Photo' : last.text) : 'Aucun message';
           const row = document.createElement('div');
           row.className = 'contact-row';
           row.innerHTML = `
             <div class="contact-avatar">${initials(peer)}</div>
-            <div>
+            <div class="contact-info">
               <div class="contact-name">${escapeHtml(peer)}</div>
               <div class="contact-preview">${last ? (last.user === username ? 'Vous: ' : '') + escapeHtml(lastPreview) : 'Aucun message'}</div>
             </div>
+            ${unreadCount > 0 ? `<div class="unread-badge">${unreadCount}</div>` : ''}
+            <button class="remove-contact-btn" title="Retirer ce contact">✕</button>
           `;
-          row.addEventListener('click', () => openChat(peer));
+          row.addEventListener('click', (e) => {
+            if(e.target.classList.contains('remove-contact-btn')) return;
+            openChat(peer);
+          });
+          row.querySelector('.remove-contact-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            removeContact(peer);
+          });
           rows[peer] = row;
           pending--;
           if(pending === 0){
@@ -391,6 +422,13 @@
           }
         });
       });
+    });
+  }
+
+  function removeContact(peer){
+    if(!confirm('Retirer ' + peer + ' de vos conversations ? (les messages ne seront pas supprimés, la conversation réapparaîtra si vous vous réécrivez)')) return;
+    db.ref('contacts/' + safeKey(username) + '/' + safeKey(peer)).remove().then(() => {
+      renderContactList();
     });
   }
 
@@ -509,6 +547,7 @@
       });
       list.sort((a,b) => a.ts - b.ts);
       renderMessages(list);
+      markAsRead(peer);
     });
     msgInput.focus();
   }
