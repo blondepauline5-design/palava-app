@@ -784,11 +784,15 @@
       username = val;
       meLabel.textContent = 'connecté en tant que ' + username;
       const uid = auth.currentUser.uid;
-      db.ref('uid_username/' + uid).set(safeKey(username));
-      showScreen('list-screen');
-      renderContactList();
-      enterBtn.disabled = false;
-      setupNotifications();
+      db.ref('uid_username/' + uid).set(safeKey(username)).then(() => {
+        showScreen('list-screen');
+        renderContactList();
+        enterBtn.disabled = false;
+        setupNotifications();
+      }).catch(err => {
+        enterBtn.disabled = false;
+        authError.textContent = 'Erreur de configuration : ' + err.message;
+      });
     };
     const onError = (err) => {
       enterBtn.disabled = false;
