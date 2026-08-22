@@ -17,7 +17,24 @@
     --text-dim: #A9B8B0;
     --bubble-me: #2E7D6E;
     --bubble-them: #2A3F38;
+    --border-col: #2A3F38;
   }
+  #palava-root.light-theme{
+    --bg: #F7F3E9;
+    --bg-panel: #FFFFFF;
+    --cream: #16221F;
+    --gold: #C98A1F;
+    --terra: #C1541F;
+    --teal: #2E7D6E;
+    --text: #2A2A2A;
+    --text-dim: #6B6B6B;
+    --bubble-me: #D6EDE6;
+    --bubble-them: #EFEFEF;
+    --border-col: #E2DCCB;
+  }
+  #palava-root.light-theme .bubble{ color:#1A1A1A; }
+  #palava-root.light-theme .msg-row.me .bubble .time,
+  #palava-root.light-theme .msg-row.them .bubble .time{ color:#7A7A7A; }
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;background:#0B120F;height:100%;}
   #palava-root{
@@ -66,8 +83,18 @@
   .room-badge{ width:38px;height:38px;border-radius:10px; background:linear-gradient(135deg, var(--gold), var(--terra)); display:flex;align-items:center;justify-content:center; flex-shrink:0; }
   .list-title{ font-weight:600; font-size:15px; }
   .list-sub{ font-size:11px; color:var(--text-dim); }
-  #logout-btn{
+  #theme-toggle-btn{
     margin-left:auto;
+    background:none;
+    border:1px solid var(--border-col);
+    color:var(--text-dim);
+    font-size:14px;
+    width:30px; height:30px;
+    border-radius:50%;
+    cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+  }
+  #logout-btn{
     background:none;
     border:1px solid #3A4E47;
     color:var(--text-dim);
@@ -231,6 +258,7 @@
         <div class="list-title">Conversations</div>
         <div class="list-sub" id="me-label"></div>
       </div>
+      <button id="theme-toggle-btn" title="Changer de thème">🌙</button>
       <button id="logout-btn" title="Changer de nom">Quitter</button>
     </div>
     <button id="support-btn">☕ Soutenir le créateur</button>
@@ -279,6 +307,27 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script>
 (function(){
+
+  function applyTheme(theme){
+    if(theme === 'light'){
+      palavaRoot.classList.add('light-theme');
+      themeToggleBtn.textContent = '☀️';
+    }else{
+      palavaRoot.classList.remove('light-theme');
+      themeToggleBtn.textContent = '🌙';
+    }
+  }
+  function toggleTheme(){
+    const isLight = palavaRoot.classList.contains('light-theme');
+    const next = isLight ? 'dark' : 'light';
+    applyTheme(next);
+    try{ localStorage.setItem('palava-theme', next); }catch(e){}
+  }
+  (function initTheme(){
+    let saved = 'dark';
+    try{ saved = localStorage.getItem('palava-theme') || 'dark'; }catch(e){}
+    applyTheme(saved);
+  })();
   const firebaseConfig = {
     apiKey: "AIzaSyDHc82KR8Bv679WMw0--lpvDtUCqiYlVqw",
     authDomain: "palava-app.firebaseapp.com",
@@ -328,6 +377,8 @@
   const messagesEl = document.getElementById('messages');
   const statusLine = document.getElementById('status-line');
   const logoutBtn = document.getElementById('logout-btn');
+  const themeToggleBtn = document.getElementById('theme-toggle-btn');
+  const palavaRoot = document.getElementById('palava-root');
   const supportBtn = document.getElementById('support-btn');
   const supportModal = document.getElementById('support-modal');
   const closeSupportModal = document.getElementById('close-support-modal');
@@ -479,8 +530,15 @@
         bubble.appendChild(label);
       }else{
         const textEl = document.createElement('div');
+        textEl.className = 'msg-text';
         textEl.textContent = m.text;
         bubble.appendChild(textEl);
+        if(m.edited){
+          const editedTag = document.createElement('span');
+          editedTag.className = 'edited-tag';
+          editedTag.textContent = '(modifié)';
+          bubble.appendChild(editedTag);
+        }
       }
 
       const timeEl = document.createElement('span');
@@ -725,6 +783,8 @@
     const onSuccess = () => {
       username = val;
       meLabel.textContent = 'connecté en tant que ' + username;
+      const uid = auth.currentUser.uid;
+      db.ref('uid_username/' + uid).set(safeKey(username));
       showScreen('list-screen');
       renderContactList();
       enterBtn.disabled = false;
@@ -842,6 +902,7 @@
     }
   });
   logoutBtn.addEventListener('click', logout);
+  themeToggleBtn.addEventListener('click', toggleTheme);
   supportBtn.addEventListener('click', () => supportModal.classList.add('active'));
   closeSupportModal.addEventListener('click', () => supportModal.classList.remove('active'));
   supportModal.addEventListener('click', (e) => { if(e.target === supportModal) supportModal.classList.remove('active'); });
