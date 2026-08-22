@@ -308,26 +308,6 @@
 <script>
 (function(){
 
-  function applyTheme(theme){
-    if(theme === 'light'){
-      palavaRoot.classList.add('light-theme');
-      themeToggleBtn.textContent = '☀️';
-    }else{
-      palavaRoot.classList.remove('light-theme');
-      themeToggleBtn.textContent = '🌙';
-    }
-  }
-  function toggleTheme(){
-    const isLight = palavaRoot.classList.contains('light-theme');
-    const next = isLight ? 'dark' : 'light';
-    applyTheme(next);
-    try{ localStorage.setItem('palava-theme', next); }catch(e){}
-  }
-  (function initTheme(){
-    let saved = 'dark';
-    try{ saved = localStorage.getItem('palava-theme') || 'dark'; }catch(e){}
-    applyTheme(saved);
-  })();
   const firebaseConfig = {
     apiKey: "AIzaSyDHc82KR8Bv679WMw0--lpvDtUCqiYlVqw",
     authDomain: "palava-app.firebaseapp.com",
@@ -379,6 +359,27 @@
   const logoutBtn = document.getElementById('logout-btn');
   const themeToggleBtn = document.getElementById('theme-toggle-btn');
   const palavaRoot = document.getElementById('palava-root');
+
+  function applyTheme(theme){
+    if(theme === 'light'){
+      palavaRoot.classList.add('light-theme');
+      themeToggleBtn.textContent = '☀️';
+    }else{
+      palavaRoot.classList.remove('light-theme');
+      themeToggleBtn.textContent = '🌙';
+    }
+  }
+  function toggleTheme(){
+    const isLight = palavaRoot.classList.contains('light-theme');
+    const next = isLight ? 'dark' : 'light';
+    applyTheme(next);
+    try{ localStorage.setItem('palava-theme', next); }catch(e){}
+  }
+  (function initTheme(){
+    let saved = 'dark';
+    try{ saved = localStorage.getItem('palava-theme') || 'dark'; }catch(e){}
+    applyTheme(saved);
+  })();
   const supportBtn = document.getElementById('support-btn');
   const supportModal = document.getElementById('support-modal');
   const closeSupportModal = document.getElementById('close-support-modal');
