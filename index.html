@@ -165,6 +165,8 @@
   .msg-row.them .bubble{ background:var(--bubble-them); border-bottom-left-radius:4px; }
   .msg-row.me .bubble{ background:var(--bubble-me); border-bottom-right-radius:4px; }
   .bubble .time{ font-size:9.5px; color:var(--text-dim); margin-top:3px; display:block; text-align:right; }
+  .seen-check{ margin-left:4px; color:var(--text-dim); }
+  .seen-check.read{ color:#6FC3E8; }
 
   .composer{ display:flex; gap:8px; padding:12px; background:var(--bg-panel); border-top:1px solid #2A3F38; flex-shrink:0; }
   #msg-input{ flex:1; padding:12px 14px; border-radius:20px; border:1px solid #3A4E47; background:var(--bg); color:var(--text); font-size:14px; outline:none; resize:none; }
@@ -295,6 +297,10 @@
   let currentPeer = null;
   let currentMsgsRef = null;
   let currentMsgsHandler = null;
+  let currentReadRef = null;
+  let currentReadHandler = null;
+  let peerReadTs = 0;
+  let lastRenderedList = [];
 
   const loginScreen = document.getElementById('login-screen');
   const usernameInput = document.getElementById('username-input');
@@ -482,6 +488,15 @@
       timeEl.textContent = formatTime(m.ts);
       bubble.appendChild(timeEl);
 
+      if(m.user.toLowerCase() === username.toLowerCase()){
+        const seenEl = document.createElement('span');
+        seenEl.className = 'seen-check';
+        const isRead = peerReadTs >= m.ts;
+        seenEl.textContent = isRead ? '✓✓' : '✓';
+        if(isRead) seenEl.classList.add('read');
+        timeEl.appendChild(seenEl);
+      }
+
       if(m.user.toLowerCase() === username.toLowerCase() && m.id){
         const delBtn = document.createElement('button');
         delBtn.className = 'delete-btn';
@@ -538,6 +553,16 @@
     if(currentMsgsRef && currentMsgsHandler){
       currentMsgsRef.off('value', currentMsgsHandler);
     }
+    if(currentReadRef && currentReadHandler){
+      currentReadRef.off('value', currentReadHandler);
+    }
+    peerReadTs = 0;
+    currentReadRef = db.ref('reads/' + safeKey(peer) + '/' + safeKey(username));
+    currentReadHandler = currentReadRef.on('value', snap => {
+      peerReadTs = snap.val() || 0;
+      renderMessages(lastRenderedList);
+    });
+
     const key = pairKey(username, peer);
     currentMsgsRef = db.ref('conversations/' + key).orderByChild('ts');
     currentMsgsHandler = currentMsgsRef.on('value', snap => {
@@ -546,6 +571,7 @@
         list.push(Object.assign({ id: child.key }, child.val()));
       });
       list.sort((a,b) => a.ts - b.ts);
+      lastRenderedList = list;
       renderMessages(list);
       markAsRead(peer);
     });
@@ -788,6 +814,9 @@
   function goBackToList(){
     if(currentMsgsRef && currentMsgsHandler){
       currentMsgsRef.off('value', currentMsgsHandler);
+    }
+    if(currentReadRef && currentReadHandler){
+      currentReadRef.off('value', currentReadHandler);
     }
     currentPeer = null;
     showScreen('list-screen');
